@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { db } from "../firebase";
+import { db, storage } from "../firebase";
 import {
   collection,
   getDocs,
@@ -8,6 +8,7 @@ import {
   doc,
   updateDoc,
 } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 const AdminMenuPage = () => {
   const [items, setItems] = useState([]);
@@ -37,11 +38,7 @@ const AdminMenuPage = () => {
   const handleChange = (e) => {
     const { name, value, files } = e.target;
     if (name === "image" && files.length > 0) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData((prev) => ({ ...prev, image: reader.result }));
-      };
-      reader.readAsDataURL(files[0]);
+      setFormData((prev) => ({ ...prev, image: files[0] }));
     } else {
       setFormData((prev) => ({ ...prev, [name]: value }));
     }
@@ -51,11 +48,28 @@ const AdminMenuPage = () => {
     e.preventDefault();
     if (!formData.name || !formData.priceAC || !formData.priceNonAC) return;
 
+    let imageUrl = formData.image;
+
+    // If a new file is selected (File object), upload to Firebase Storage
+    if (formData.image instanceof File) {
+      const storageRef = ref(storage, `menuImages/${Date.now()}_${formData.image.name}`);
+      const snapshot = await uploadBytes(storageRef, formData.image);
+      imageUrl = await getDownloadURL(snapshot.ref);
+    }
+
+    const itemData = {
+      name: formData.name,
+      priceAC: formData.priceAC,
+      priceNonAC: formData.priceNonAC,
+      category: formData.category,
+      image: imageUrl,
+    };
+
     if (editItem) {
-      const ref = doc(db, "menuItems", editItem.id);
-      await updateDoc(ref, formData);
+      const refDoc = doc(db, "menuItems", editItem.id);
+      await updateDoc(refDoc, itemData);
     } else {
-      await addDoc(menuCollection, formData);
+      await addDoc(menuCollection, itemData);
     }
 
     const snapshot = await getDocs(menuCollection);
@@ -71,7 +85,13 @@ const AdminMenuPage = () => {
 
   const handleEdit = (item) => {
     setEditItem(item);
-    setFormData(item);
+    setFormData({
+      name: item.name,
+      priceAC: item.priceAC,
+      priceNonAC: item.priceNonAC,
+      category: item.category,
+      image: item.image,
+    });
   };
 
   const handleDelete = async (id) => {
@@ -156,10 +176,10 @@ const AdminMenuPage = () => {
       {Object.keys(groupedItems).map((category) => (
         <div key={category} className="mb-6">
           <h3 className="text-md font-bold text-gray-700 mb-2">{category}</h3>
-          <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+          <ul className="divide-y divide-gray-200">
             {groupedItems[category].map((item) => (
               <li key={item.id} className="py-3 sm:py-4">
-                <div className="flex items-center space-x-4 rtl:space-x-reverse">
+                <div className="flex items-center space-x-4">
                   <div className="shrink-0">
                     <img
                       className="w-12 h-12 rounded-full object-cover"
@@ -176,7 +196,8 @@ const AdminMenuPage = () => {
                     </p>
                   </div>
                   <div className="text-sm text-gray-700">
-                    AC: ₹{item.priceAC}<br />
+                    AC: ₹{item.priceAC}
+                    <br />
                     Non-AC: ₹{item.priceNonAC}
                   </div>
                   <div className="flex flex-col gap-1">
