@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { db, storage } from "../firebase";
+import { db } from "../firebase";
 import {
   collection,
   getDocs,
@@ -8,16 +8,16 @@ import {
   doc,
   updateDoc,
 } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 const AdminMenuPage = () => {
+  const [previewUrl, setPreviewUrl] = useState(null);
   const [items, setItems] = useState([]);
   const [formData, setFormData] = useState({
     name: "",
     priceAC: "",
     priceNonAC: "",
     category: "",
-    image: "",
+    image: "", // Just a filename like "vegfriedrice.jpg"
   });
   const [editItem, setEditItem] = useState(null);
 
@@ -35,53 +35,87 @@ const AdminMenuPage = () => {
     fetchItems();
   }, []);
 
-  const handleChange = (e) => {
-    const { name, value, files } = e.target;
-    if (name === "image" && files.length > 0) {
-      setFormData((prev) => ({ ...prev, image: files[0] }));
-    } else {
-      setFormData((prev) => ({ ...prev, [name]: value }));
-    }
-  };
+  const uploadImageToServer = async (file) => {
+  const formData = new FormData();
+  formData.append("image", file);
+
+  const res = await fetch("http://localhost:5000/upload", {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!res.ok) {
+    alert("Image upload failed");
+    return null;
+  }
+
+  const data = await res.json();
+  return data.filename;
+};
+
+
+ const handleChange = (e) => {
+  const { name, value, files } = e.target;
+  if (name === "image" && files.length > 0) {
+    const file = files[0];
+    setFormData((prev) => ({
+      ...prev,
+      image: `${Date.now()}_${file.name}`,
+      imageFile: file,
+    }));
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPreviewUrl(reader.result);
+    };
+    reader.readAsDataURL(file);
+  } else {
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  }
+};
+
+
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!formData.name || !formData.priceAC || !formData.priceNonAC) return;
+  e.preventDefault();
+  if (!formData.name || !formData.priceAC || !formData.priceNonAC) return;
 
-    let imageUrl = formData.image;
+  let uploadedImageName = formData.image;
 
-    // If a new file is selected (File object), upload to Firebase Storage
-    if (formData.image instanceof File) {
-      const storageRef = ref(storage, `menuImages/${Date.now()}_${formData.image.name}`);
-      const snapshot = await uploadBytes(storageRef, formData.image);
-      imageUrl = await getDownloadURL(snapshot.ref);
+  if (formData.imageFile) {
+    const uploaded = await uploadImageToServer(formData.imageFile);
+    if (uploaded) {
+      uploadedImageName = uploaded;
     }
+  }
 
-    const itemData = {
-      name: formData.name,
-      priceAC: formData.priceAC,
-      priceNonAC: formData.priceNonAC,
-      category: formData.category,
-      image: imageUrl,
-    };
-
-    if (editItem) {
-      const refDoc = doc(db, "menuItems", editItem.id);
-      await updateDoc(refDoc, itemData);
-    } else {
-      await addDoc(menuCollection, itemData);
-    }
-
-    const snapshot = await getDocs(menuCollection);
-    const itemsData = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-    setItems(itemsData);
-
-    setFormData({ name: "", priceAC: "", priceNonAC: "", category: "", image: "" });
-    setEditItem(null);
+  const itemData = {
+    name: formData.name,
+    priceAC: formData.priceAC,
+    priceNonAC: formData.priceNonAC,
+    category: formData.category,
+    image: uploadedImageName, // ✅ actual filename from upload
   };
+
+  if (editItem) {
+    const refDoc = doc(db, "menuItems", editItem.id);
+    await updateDoc(refDoc, itemData);
+  } else {
+    await addDoc(menuCollection, itemData);
+  }
+
+  const snapshot = await getDocs(menuCollection);
+  const itemsData = snapshot.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data(),
+  }));
+  setItems(itemsData);
+
+  setFormData({ name: "", priceAC: "", priceNonAC: "", category: "", image: "", imageFile: null });
+  setPreviewUrl(null);
+  setEditItem(null);
+};
+
 
   const handleEdit = (item) => {
     setEditItem(item);
@@ -90,7 +124,7 @@ const AdminMenuPage = () => {
       priceAC: item.priceAC,
       priceNonAC: item.priceNonAC,
       category: item.category,
-      image: item.image,
+      image: item.image || "",
     });
   };
 
@@ -161,6 +195,12 @@ const AdminMenuPage = () => {
             onChange={handleChange}
             className="w-full"
           />
+          {previewUrl && (
+  <img src={previewUrl} alt="Preview" className="w-24 h-24 object-cover rounded" />
+)}
+          <p className="text-sm text-gray-500">
+            After selecting a file, manually copy it to: <code>public/menuImages/</code>
+          </p>
 
           <button
             type="submit"
@@ -183,8 +223,11 @@ const AdminMenuPage = () => {
                   <div className="shrink-0">
                     <img
                       className="w-12 h-12 rounded-full object-cover"
-                      src={item.image}
+                      src={`/menuImages/${item.image || "default.jpg"}`}
                       alt={item.name}
+                      onError={(e) =>
+                        (e.currentTarget.src = "/menuImages/default.jpg")
+                      }
                     />
                   </div>
                   <div className="flex-1 min-w-0">

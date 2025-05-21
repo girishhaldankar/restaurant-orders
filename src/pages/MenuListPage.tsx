@@ -59,26 +59,25 @@ const MenuListPage = () => {
           />
 
           <div className="flex justify-center mb-4">
-  <div className="inline-flex rounded-full bg-gray-200 p-1 shadow-inner">
-    <button
-      onClick={() => setShowAC(false)}
-      className={`px-4 py-1 rounded-full transition font-medium ${
-        !showAC ? "bg-blue-600 text-white" : "text-gray-700"
-      }`}
-    >
-      Non-AC
-    </button>
-    <button
-      onClick={() => setShowAC(true)}
-      className={`px-4 py-1 rounded-full transition font-medium ${
-        showAC ? "bg-blue-600 text-white" : "text-gray-700"
-      }`}
-    >
-      AC
-    </button>
-  </div>
-</div>
-
+            <div className="inline-flex rounded-full bg-gray-200 p-1 shadow-inner">
+              <button
+                onClick={() => setShowAC(false)}
+                className={`px-4 py-1 rounded-full transition font-medium ${
+                  !showAC ? "bg-blue-600 text-white" : "text-gray-700"
+                }`}
+              >
+                Non-AC
+              </button>
+              <button
+                onClick={() => setShowAC(true)}
+                className={`px-4 py-1 rounded-full transition font-medium ${
+                  showAC ? "bg-blue-600 text-white" : "text-gray-700"
+                }`}
+              >
+                AC
+              </button>
+            </div>
+          </div>
         </div>
 
         {Object.entries(groupedItems).map(([catName, catItems]) => (
@@ -88,9 +87,10 @@ const MenuListPage = () => {
               {catItems.map(item => (
                 <li key={item.id} className="py-4 flex items-center space-x-4">
                   <img
-                    src={item.image}
+                    src={`/menuImages/${item.image || "default.jpg"}`}
                     alt={item.name}
                     className="w-16 h-16 rounded object-cover"
+                    onError={(e) => (e.currentTarget.src = "/menuImages/default.jpg")}
                   />
                   <div className="flex-1 min-w-0">
                     <p className="text-lg font-medium text-gray-900">{item.name}</p>
